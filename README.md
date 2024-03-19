@@ -2,6 +2,10 @@
 
 Must load `OSS_ACCESS_KEY_ID` and `OSS_ACCESS_KEY_SECRET` into environment variables first.
 
+## Install
+
+`pip install oss2_uploader`
+
 ## Usage
 
 only executable under `if __name__ == "__main__":`
