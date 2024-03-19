@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oss2_uploader"
-version = "0.0.6"
+version = "0.0.7"
 authors = [{ name = "YugoAmaryl46", email = "badapplesweetie@gmail.com" }]
 description = "Uploader files in a folder to Aliyun OSS"
 readme = "README.md"
