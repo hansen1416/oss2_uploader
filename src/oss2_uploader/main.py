@@ -3,6 +3,7 @@ import os
 import sys
 import time
 
+import tqdm
 import oss2
 from oss2.credentials import EnvironmentVariableCredentialsProvider
 
@@ -32,7 +33,9 @@ def split_array(array, n):
 
 class UploadTask(Process):
 
-    def __init__(self, file_list, oss_path="", process_idx="") -> None:
+    def __init__(
+        self, file_list, bucket_name, oss_endpoint, oss_path="", process_idx=""
+    ) -> None:
 
         # execute the base constructor
         Process.__init__(self)
@@ -49,17 +52,19 @@ class UploadTask(Process):
         auth = oss2.ProviderAuth(EnvironmentVariableCredentialsProvider())
 
         # yourEndpoint填写Bucket所在地域对应的Endpoint。以华东1（杭州）为例，Endpoint填写为https://oss-cn-hangzhou.aliyuncs.com。
-        endpoint = "oss-ap-southeast-1.aliyuncs.com"
-
         # 填写Bucket名称，并设置连接超时时间为30秒。
-        self.bucket = oss2.Bucket(auth, endpoint, "pose-daten", connect_timeout=30)
+        self.bucket = oss2.Bucket(auth, oss_endpoint, bucket_name, connect_timeout=30)
 
     def run(self) -> None:
         """
         list all files in the upload_dir and upload them to oss, not checking sub directories
         """
 
-        for filepath in self.file_list:
+        for filepath in tqdm.tqdm(
+            self.file_list,
+            position=self.process_idx,
+            desc=f"Process {self.process_idx}",
+        ):
             if not os.path.isfile(filepath):
                 continue
 
@@ -69,7 +74,7 @@ class UploadTask(Process):
 
             # check if the file already exists in oss
             if self.bucket.object_exists(target_path):
-                print(f"{self.process_idx}: {target_path} already exists in oss")
+                # print(f"{self.process_idx}: {target_path} already exists in oss")
                 continue
 
             self.bucket.put_object_from_file(
@@ -77,16 +82,12 @@ class UploadTask(Process):
                 filepath,
             )
 
-            print(f"{self.process_idx}: uploaded {filepath} to {target_path}")
+            # print(f"{self.process_idx}: uploaded {filepath} to {target_path}")
 
 
-if __name__ == "__main__":
+def folder_uploader(folder_path, bucket_name, oss_endpoint, oss_path=None):
 
-    if len(sys.argv) < 2:
-        print("Usage: python upload_folder.py <folder_path>")
-        sys.exit(1)
-
-    folder_path = sys.argv[1]
+    folder_path = os.path.abspath(folder_path)
 
     if not os.path.exists(folder_path):
         print(f"{folder_path} does not exist")
@@ -105,30 +106,64 @@ if __name__ == "__main__":
     processes = [
         UploadTask(
             file_list=chunk,
+            bucket_name=bucket_name,
+            oss_path=oss_path,
+            oss_endpoint=oss_endpoint,
             process_idx=i,
         )
         for i, chunk in enumerate(file_chunks)
     ]
 
-    # start the processes
-    start_time = time.time()
+    print(
+        f"Uploading {len(all_files)} files to {bucket_name} using {cpu_count} processes"
+    )
 
     # run the process,
     for process in processes:
         process.start()
 
     for process in processes:
-        # report the daemon attribute
-        print(
-            process.daemon,
-            process.name,
-            process.pid,
-            process.exitcode,
-            process.is_alive(),
-        )
-
         process.join()
 
-    end_time = time.time()
 
-    print(f"Time taken: {end_time - start_time}")
+if __name__ == "__main__":
+
+    def load_env_from_file(file_path: str = None):
+        """
+        Loads environment variables from a local file.
+
+        Args:
+            file_path (str): Path to the environment variable file.
+
+        Returns:
+            dict: Dictionary containing the loaded environment variables.
+        """
+
+        if file_path is None:
+            file_path = os.path.join(os.path.dirname(__file__), ".env")
+
+        if not os.path.exists(file_path):
+            raise ValueError(f"Environment variable file not found: {file_path}")
+
+        # Open the file and read its lines
+        with open(file_path, "r") as file:
+            lines = file.readlines()
+
+        # Load variables into a dictionary
+        for line in lines:
+            line = line.strip()  # Remove leading/trailing whitespace
+            if not line or line.startswith("#"):  # Skip empty lines and comments
+                continue
+            key, value = line.split("=", 1)  # Split line by `=`
+            # Remove leading/trailing quotes from key and value
+            os.environ[key.strip()] = value.strip()
+
+    load_env_from_file(
+        file_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+    )
+
+    folder_uploader(
+        os.path.join(os.path.expanduser("~"), "Documents", "test111"),
+        "pose-daten",
+        "oss-ap-southeast-1.aliyuncs.com",
+    )
