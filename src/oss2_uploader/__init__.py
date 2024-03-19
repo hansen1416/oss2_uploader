@@ -1,3 +1,3 @@
-from .main import UploadTask, split_array, folder_uploader
+from .main import folder_uploader, folder_downloader
 
-__all__ = ["folder_uploader", "UploadTask", "split_array"]
+__all__ = ["folder_uploader", "folder_downloader"]

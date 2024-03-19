@@ -125,6 +125,83 @@ def folder_uploader(folder_path, bucket_name, oss_endpoint, oss_path=None):
         process.join()
 
 
+class DopwnloadTask(Process):
+
+    def __init__(self, bucket, osskey_list, target_dir, process_idx="") -> None:
+
+        # execute the base constructor
+        Process.__init__(self)
+
+        self.osskey_list = osskey_list
+        self.target_dir = target_dir
+        self.process_idx = process_idx
+
+        self.bucket = bucket
+
+    def run(self) -> None:
+        """
+        list all files in the upload_dir and upload them to oss, not checking sub directories
+        """
+
+        for osskey in tqdm.tqdm(
+            self.osskey_list,
+            position=self.process_idx,
+            desc=f"Process {self.process_idx}",
+        ):
+            # split `osskey` into `path` and `filename`
+            filename = osskey.split("/")[-1]
+
+            target_path = os.path.join(self.target_dir, filename)
+
+            if os.path.isfile(target_path):
+                continue
+
+            self.bucket.get_object_to_file(osskey, target_path)
+
+
+def folder_downloader(bucket_name, oss_endpoint, oss_prefix, target_dir):
+
+    # 使用环境变量中获取的RAM用户的访问密钥配置访问凭证。
+    auth = oss2.ProviderAuth(EnvironmentVariableCredentialsProvider())
+
+    # yourEndpoint填写Bucket所在地域对应的Endpoint。以华东1（杭州）为例，Endpoint填写为https://oss-cn-hangzhou.aliyuncs.com。
+    # 填写Bucket名称，并设置连接超时时间为30秒。
+    bucket = oss2.Bucket(auth, oss_endpoint, bucket_name, connect_timeout=30)
+
+    # list all files in the oss_prefix
+    osskey_list = [obj.key for obj in oss2.ObjectIterator(bucket, prefix=oss_prefix)]
+
+    # get cpu count
+    cpu_count = os.cpu_count()
+
+    print(
+        f"Downloading {len(osskey_list)} files from {bucket_name} using {cpu_count} processes"
+    )
+
+    # split the files into cpu_count parts
+    file_chunks = split_array(osskey_list, cpu_count)
+
+    os.makedirs(target_dir, exist_ok=True)
+
+    # create a process for each chunk
+    processes = [
+        DopwnloadTask(
+            bucket=bucket,
+            osskey_list=chunk,
+            target_dir=target_dir,
+            process_idx=i,
+        )
+        for i, chunk in enumerate(file_chunks)
+    ]
+
+    # run the process,
+    for process in processes:
+        process.start()
+
+    for process in processes:
+        process.join()
+
+
 if __name__ == "__main__":
 
     def load_env_from_file(file_path: str = None):
@@ -161,8 +238,15 @@ if __name__ == "__main__":
         file_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env")
     )
 
-    folder_uploader(
-        os.path.join(os.path.expanduser("~"), "Documents", "test111"),
+    # folder_uploader(
+    #     os.path.join(os.path.expanduser("~"), "Documents", "test111"),
+    #     "pose-daten",
+    #     "oss-ap-southeast-1.aliyuncs.com",
+    # )
+
+    folder_downloader(
         "pose-daten",
         "oss-ap-southeast-1.aliyuncs.com",
+        "test111",
+        os.path.join(os.path.expanduser("~"), "Documents", "test111"),
     )
