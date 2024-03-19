@@ -1,7 +1,6 @@
 from multiprocessing import Process
 import os
 import sys
-import time
 
 import tqdm
 import oss2
@@ -86,6 +85,11 @@ class UploadTask(Process):
 
 
 def folder_uploader(folder_path, bucket_name, oss_endpoint, oss_path=None):
+
+    # check if __name__ is __main__
+    if __name__ != "__main__":
+        print("This function can only be called from the main module")
+        return
 
     folder_path = os.path.abspath(folder_path)
 
