@@ -4,7 +4,7 @@ Must load `OSS_ACCESS_KEY_ID` and `OSS_ACCESS_KEY_SECRET` into environment varia
 
 ## Install
 
-`pip install oss2_uploader`
+`pip install oss2-uploader`
 
 ## Usage
 
